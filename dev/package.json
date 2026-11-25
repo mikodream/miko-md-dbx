@@ -1,0 +1,7 @@
+{
+  "name": "miko-md-notes-dev",
+  "private": true,
+  "type": "module",
+  "description": "仅用于本地端到端测试的依赖，不进插件包",
+  "devDependencies": { "jsdom": "^29.1.1" }
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MIKO.MD Notes vault">
+  <defs>
+    <linearGradient id="cnv" x1="6" y1="58" x2="58" y2="6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22b8a0"/>
+      <stop offset="1" stop-color="#7c6cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#cnv)"/>
+  <path fill="#fff" fill-opacity=".95" d="M14 22a4 4 0 0 1 4-4h9l4 5h15a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V22Z"/>
+  <path fill="#3b2f8f" d="M22 46V32h3.4l3.6 5 3.6-5H36v14h-3.2v-8.2L29.6 43l-3.2-5.2V46H22Zm17.4 0-4.2-6.8h3V32h3.2v7.2h3L40.4 46Z"/>
+</svg>

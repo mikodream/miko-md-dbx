@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh" data-dbx-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIKO.MD 笔记</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="boot" class="boot"><div class="spinner"></div></div>
+
+<div id="shell" class="shell" data-pane="tree" hidden>
+  <header class="topbar">
+    <button id="btn-menu-tree" class="icon-btn only-narrow" type="button" data-i18n-title="treeTitle">☰</button>
+    <div class="brand">
+      <span id="vault-name" class="brand-name">MIKO.MD</span>
+      <span id="vault-stats" class="brand-stats"></span>
+    </div>
+    <div class="search-wrap">
+      <input id="search" class="search" type="search" autocomplete="off" spellcheck="false" data-i18n-ph="searchPlaceholder">
+    </div>
+    <div class="tools">
+      <button id="btn-import-md" class="btn" type="button" data-i18n="importMd"></button>
+      <button id="btn-import-folder" class="btn" type="button" data-i18n="importFolder"></button>
+      <button id="btn-backup" class="btn" type="button" data-i18n="backup"></button>
+      <button id="btn-restore" class="btn" type="button" data-i18n="restore"></button>
+      <button id="btn-open-fs" class="btn" type="button" data-i18n="openFs"></button>
+      <button id="btn-refresh" class="btn" type="button" data-i18n="refresh"></button>
+      <div class="seg" role="group" aria-label="view">
+        <button class="seg-btn" type="button" data-view="edit" data-i18n="viewEdit"></button>
+        <button class="seg-btn" type="button" data-view="split" data-i18n="viewSplit"></button>
+        <button class="seg-btn" type="button" data-view="preview" data-i18n="viewPreview"></button>
+      </div>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden>
+    <span id="banner-text" class="banner-text"></span>
+    <div class="banner-actions">
+      <button id="banner-primary" class="btn btn-small" type="button"></button>
+      <button id="banner-secondary" class="btn btn-small" type="button"></button>
+    </div>
+  </div>
+
+  <main class="workspace">
+    <aside class="pane pane-tree">
+      <div class="tree-tools">
+        <button id="btn-new-note" class="btn btn-primary btn-small grow" type="button" data-i18n="newNote"></button>
+        <button id="btn-new-folder" class="btn btn-small grow" type="button" data-i18n="newFolder"></button>
+      </div>
+      <header class="pane-head">
+        <span class="pane-title" data-i18n="treeTitle"></span>
+        <span id="tree-count" class="pane-meta"></span>
+      </header>
+      <div id="tree" class="tree scroll"></div>
+    </aside>
+
+    <section class="pane pane-main">
+      <div class="doc-head">
+        <button id="btn-back-tree" class="icon-btn only-narrow" type="button" data-i18n-title="backToTree">‹</button>
+        <span id="doc-title" class="doc-title"></span>
+        <div class="doc-actions">
+          <button id="btn-export" class="btn btn-small" type="button" data-i18n="exportNote"></button>
+        </div>
+      </div>
+
+      <div id="md-toolbar" class="md-toolbar">
+        <button class="tb" type="button" data-md="h1" title="H1">H1</button>
+        <button class="tb" type="button" data-md="h2" title="H2">H2</button>
+        <button class="tb" type="button" data-md="p" data-i18n="tbPara"></button>
+        <span class="tb-sep"></span>
+        <button class="tb" type="button" data-md="bold" data-i18n="tbBold"></button>
+        <button class="tb" type="button" data-md="italic" data-i18n="tbItalic"></button>
+        <button class="tb" type="button" data-md="code" data-i18n="tbCode"></button>
+        <button class="tb" type="button" data-md="codeblock" data-i18n="tbCodeBlock"></button>
+        <button class="tb" type="button" data-md="link" data-i18n="tbLink"></button>
+        <span class="tb-sep"></span>
+        <button class="tb" type="button" data-md="ul" data-i18n="tbUl"></button>
+        <button class="tb" type="button" data-md="task" data-i18n="tbTask"></button>
+        <button class="tb" type="button" data-md="quote" data-i18n="tbQuote"></button>
+        <button class="tb" type="button" data-md="hr" data-i18n="tbHr"></button>
+        <button class="tb" type="button" data-md="image" data-i18n="tbImage"></button>
+      </div>
+
+      <div id="editor-body" class="editor-body" data-view="split">
+        <div class="editor-col">
+          <textarea id="editor" class="editor" spellcheck="false" wrap="soft" disabled></textarea>
+          <div id="placeholder" class="placeholder" hidden>
+            <h2 id="ph-title" class="ph-title"></h2>
+            <p id="ph-body" class="ph-body"></p>
+            <div class="ph-actions">
+              <button id="ph-create" class="btn btn-primary" type="button" data-i18n="generateFirst"></button>
+              <button id="ph-import" class="btn" type="button" data-i18n="importMd"></button>
+            </div>
+          </div>
+        </div>
+        <div id="preview-col" class="preview-col scroll">
+          <article id="preview" class="preview"></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <span id="status-path" class="st-path"></span>
+    <span id="status-msg" class="st-msg"></span>
+    <span class="st-spacer"></span>
+    <span id="status-words" class="st-words"></span>
+    <label class="st-auto" id="st-auto-label">
+      <input id="auto-save" type="checkbox" checked>
+      <span data-i18n="autoSave"></span>
+    </label>
+    <span id="status-save" class="st-save"></span>
+  </footer>
+</div>
+
+<div id="nocontext" class="noc" hidden>
+  <div class="noc-card">
+    <h2 id="noc-title" class="noc-title"></h2>
+    <p id="noc-body" class="noc-body"></p>
+    <pre id="noc-hint" class="noc-hint"></pre>
+    <div class="noc-actions">
+      <button id="noc-copy" class="btn btn-primary" type="button" data-i18n="copy"></button>
+    </div>
+  </div>
+</div>
+
+<div id="drop-overlay" class="drop-overlay" hidden>
+  <div class="drop-card"><span data-i18n="dropHint"></span></div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+<div id="modal-root" class="modal-root" hidden></div>
+<div id="menu-root" class="menu-root" hidden></div>
+
+<input id="file-input" type="file" multiple hidden>
+<input id="zip-input" type="file" accept=".zip,application/zip" hidden>
+
+<script src="markdown.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

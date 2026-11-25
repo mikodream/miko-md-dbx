@@ -1,0 +1,162 @@
+{
+  "$schema": "https://raw.githubusercontent.com/t8y2/dbx/main/plugins/manifest.schema.json",
+  "manifest_version": 1,
+  "id": "miko.md.notes",
+  "name": "MIKO.MD 笔记",
+  "version": "0.1.0",
+  "publisher": "miko",
+  "description": "把一个本地目录当成笔记库来用：笔记是真实的 .md 文件，文件夹是真实的子目录，同时可作为 mdnotes:// 虚拟文件系统浏览。",
+  "icon": "assets/plugin.svg",
+  "source": "https://github.com/mikodream/miko-md-dbx",
+  "engines": {
+    "dbx": ">=0.6.0",
+    "host_api": "1"
+  },
+  "permissions": [
+    "host.workbench",
+    "host.filesystem",
+    "host.storage"
+  ],
+  "entrypoints": {
+    "backend": {
+      "protocol_versions": [
+        1
+      ],
+      "transport": "stdio-jsonl",
+      "executable": "bin/miko-md-notes"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "miko.md.notes.connection",
+      "label": "MIKO.MD 笔记",
+      "icon": "assets/connection.svg",
+      "database_type": "mdnotes",
+      "description": "选一个本地目录作为笔记库。每个 .md 文件是一条笔记，每个子目录是一个文件夹。",
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "连接名称",
+          "type": "text",
+          "binding": "name",
+          "default": "MIKO.MD 笔记",
+          "required": true
+        },
+        {
+          "key": "vault_path",
+          "label": "笔记库目录",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "~/Documents/notes",
+          "description": "笔记库所在的本地目录，笔记就是这个目录里的 .md 文件。",
+          "picker": {
+            "kind": "directory"
+          },
+          "required": true
+        },
+        {
+          "key": "assets_dir",
+          "label": "图片目录",
+          "type": "text",
+          "binding": "config",
+          "default": "_assets",
+          "description": "粘贴或拖入的图片存放在笔记库下的这个子目录里。"
+        },
+        {
+          "key": "trash_enabled",
+          "label": "删除时移入 .trash",
+          "type": "boolean",
+          "binding": "config",
+          "default": true,
+          "description": "关闭后删除笔记与文件夹是永久删除。"
+        }
+      ],
+      "workbench": "miko.md.notes.workbench",
+      "filesystem_provider": "miko.md.notes.fs",
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
+      "actions": [
+        {
+          "id": "create-vault",
+          "label": "创建目录",
+          "description": "目录不存在时按填写的路径创建，并写入一篇欢迎笔记。",
+          "variant": "outline",
+          "when": "create",
+          "requires_valid_form": false,
+          "close_on_success": false,
+          "timeout_ms": 15000
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "miko.md.notes.workbench",
+      "label": "MIKO.MD 笔记",
+      "description": "目录树、编辑器、实时预览与图片粘贴。",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "filesystem-provider",
+      "id": "miko.md.notes.fs",
+      "label": "MIKO.MD 笔记库",
+      "icon": "assets/plugin.svg",
+      "schemes": [
+        "mdnotes"
+      ],
+      "root_uri": "mdnotes://vault/",
+      "capabilities": [
+        "read",
+        "write",
+        "delete",
+        "rename",
+        "mkdir"
+      ]
+    }
+  ],
+  "localizations": {
+    "en": {
+      "name": "MIKO.MD Notes",
+      "description": "Use a local folder as a notebook: notes are real .md files, folders are real subdirectories, and the vault is browsable as the mdnotes:// virtual filesystem.",
+      "contributions": {
+        "miko.md.notes.connection": {
+          "label": "MIKO.MD Notes",
+          "description": "Pick a local folder as your vault. Every .md file is a note, every subdirectory is a folder.",
+          "fields": {
+            "display_name": {
+              "label": "Connection name"
+            },
+            "vault_path": {
+              "label": "Vault folder",
+              "placeholder": "~/Documents/notes",
+              "description": "Local folder holding the notes; notes are the .md files inside it."
+            },
+            "assets_dir": {
+              "label": "Image folder",
+              "description": "Subfolder of the vault that receives pasted and dropped images."
+            },
+            "trash_enabled": {
+              "label": "Move deletions to .trash",
+              "description": "When off, deleting notes and folders is permanent."
+            }
+          }
+        },
+        "miko.md.notes.workbench": {
+          "label": "MIKO.MD Notes",
+          "description": "Folder tree, editor, live preview, and image paste."
+        },
+        "miko.md.notes.fs": {
+          "label": "MIKO.MD vault"
+        }
+      }
+    }
+  },
+  "homepage": "https://github.com/mikodream/miko-md-dbx"
+}
