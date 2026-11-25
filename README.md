@@ -2,7 +2,7 @@
 
 把**一个本地目录**变成 DBX 里的笔记库。笔记是磁盘上真实的 `.md` 文件，文件夹是真实的子目录；同一个库还能以 `mdnotes://vault/` 虚拟文件系统在 DBX 文件管理器里浏览。
 
-- 插件 id：`miko.md.notes` ｜ 版本：`0.1.4` ｜ 产地：本仓库 `markdown/`
+- 插件 id：`miko.md.notes` ｜ 版本：`0.1.0` ｜ 作者：`miko` ｜ 仓库：<https://github.com/mikodream/miko-md-dbx>
 - 平台契约：Manifest v1 + Host API 1.x + Sidecar 协议 v1
 - 后端：Go 标准库（零第三方依赖），单进程 JSONL Sidecar
 - 前端：静态 HTML/CSS/JS，无构建步骤、无网络、无外部资源
@@ -12,7 +12,6 @@
 ## 安装
 
 ```bash
-cd markdown
 dbx-plugin package . --target darwin-arm64     # 生成 dist/miko.md.notes-<版本>-darwin-arm64.dbxp
 ```
 
@@ -116,19 +115,20 @@ DBX 的安装是**按 id + version 记账**的：
 
 ```bash
 # 后端
-cd markdown/backend && go build -o ../bin/miko-md-notes .   # go vet / gofmt 见下
+cd backend && go build -o ../bin/miko-md-notes .   # go vet / gofmt 见下
 gofmt -l . && go vet ./...
 
 # 契约级冒烟（82 项断言：生命周期、CRUD、图片、导入、备份/恢复、mdnotes://）
 python3 dev/smoke.py --binary bin/miko-md-notes
 
 # UI × 后端端到端（jsdom 冒充 DBX 宿主；需 cd dev && npm install）
-node dev/ui-test.mjs            # 31 项：启动、树/列表、打开、Ctrl+S、粘贴图片、XSS、openFilesystem
+node dev/ui-test.mjs            # 60 项：启动、目录树、打开/Ctrl+S、拖拽移动、粘贴图片、XSS、openFilesystem
 node dev/ui-test-noconn.mjs     # 5 项：没有 connectionId 时的降级提示
 node dev/ui-test-lastnote.mjs   # 5 项：回到上次打开的笔记
 
-# manifest 离线校验
-python3 ../.agents/skills/dbx-plugin-dev/scripts/check_manifest.py .
+# manifest 离线校验（可选：没装 dbx-plugin-dev skill 时跳过，打包本身也会校验）
+python3 "${DBX_SKILL:-$HOME/.agents/skills/dbx-plugin-dev}/scripts/check_manifest.py" . 2>/dev/null || \
+  echo "跳过 manifest 校验（未找到 check_manifest.py）"
 
 # 本地开发宿主（浏览器里看真 UI，连真后端）
 dbx-plugin dev --path . --port 5190
@@ -137,20 +137,20 @@ dbx-plugin dev --path . --port 5190
 dbx-plugin package . --target darwin-arm64
 ```
 
-验证现状：协议冒烟 82 项、UI 端到端 41 项、manifest 校验 0 error，全部通过。
+验证现状：协议冒烟 82 项、UI 端到端 60 + 5 + 5 项、manifest 校验 0 error，全部通过。
 
 `dev/SPEC.md` 是后端与 UI 之间的唯一契约（36 个 RPC 方法、错误码前缀、路径规则、UI 行为要求）。两份实现都不许偏离它。
 
 ### 目录结构
 
 ```
-markdown/
+.
 ├── manifest.json          # 连接类型 / 工作台 / mdnotes:// 三个贡献点
 ├── dbx-plugin.toml        # 打包清单与 Go 后端声明
 ├── assets/                # 插件与连接图标
 ├── ui/                    # 沙箱工作台（index.html / app.js / markdown.js / style.css）
 ├── backend/               # Go Sidecar（main.go / vault.go / archive.go）
-├── dev/                   # SPEC.md 与协议冒烟脚本（不打包）
+├── dev/                   # SPEC.md、协议冒烟、UI 端到端、发布脚本（不打包）
 ├── docs/                  # 截图（不打包）
 └── dist/                  # 构建产物（不提交）
 ```
@@ -169,4 +169,4 @@ markdown/
 
 作者不持私钥、不跑 `keygen`、不填 `signingKeyId`。流程：自己的仓库打 Tag 发候选 Release（含未签名 `.dbxp` + `.artifact.json` + `release-candidates.json`）→ `dbx-store` 同步 Workflow 建候选 PR → 维护者审核并签名 → 合并。每一步版本号必须递增，已发布资产不可覆盖。
 
-细节见 `.agents/skills/dbx-plugin-dev/references/publish.md`。
+细节见 DBX 官方文档：<https://dbxio.com/cn/docs/plugin-development>。
