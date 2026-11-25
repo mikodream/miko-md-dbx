@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "miko.md.notes",
   "name": "MIKO.MD 笔记",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "miko",
   "description": "把一个本地目录当成笔记库来用：笔记是真实的 .md 文件，文件夹是真实的子目录，同时可作为 mdnotes:// 虚拟文件系统浏览。",
   "icon": "assets/plugin.svg",
