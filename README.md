@@ -188,6 +188,26 @@ dbx-plugin package . --target darwin-arm64
    - `release-candidates.json`（`{ plugin: {id,name,description,publisher,version,permissions}, artifacts: [{target,url,sha256,size}] }`，`dbx-store` 的 `sync-release-candidate.mjs` 直接读这个结构）
    - Release Notes（含平台表、SHA-256 校验清单、本次提交列表）与源码 tag
 
+商店展示信息写在仓库根的 `.dbx-store.json`（由 `dbx-store` 的同步任务在对应 tag 下抓取）：
+
+| 字段 | 说明 |
+| --- | --- |
+| `name` / `description` | 商店里的标题与介绍（默认语言） |
+| `icon` | 包内相对路径（同步时转成 tag 下的 raw URL）或 http(s) 绝对地址 |
+| `tags` | 分类标签，不重复字符串数组 |
+| `source` / `homepage` | 源码与主页 |
+| `license` | 许可证标识，需与仓库 `LICENSE` 一致 |
+| `releaseNotes` | 商店展示的版本说明（跨版本沿用，别写死版本号） |
+| `localizations` | 按 locale 覆盖，每项只允许 `{ name, description }`；商店会对缺 `zh-CN`、以及中文正文缺 `en` 打警告 |
+
+只认这些字段，多一个都会被拒。本地校验：
+
+```bash
+node dev/ci/check-store-metadata.mjs
+```
+
+许可证：[Apache-2.0](LICENSE)。
+
 本地也能跑同一套汇总，用来验证产物：
 
 ```bash

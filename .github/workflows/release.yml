@@ -53,6 +53,9 @@ jobs:
           go-version-file: backend/go.mod
           cache: false
 
+      - name: 校验 .dbx-store.json
+        run: node dev/ci/check-store-metadata.mjs
+
       - name: 计算版本、必要时递增，并打 tag
         id: version
         env:
