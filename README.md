@@ -188,6 +188,16 @@ dbx-plugin package . --target darwin-arm64
    - `release-candidates.json`（`{ plugin: {id,name,description,publisher,version,permissions}, artifacts: [{target,url,sha256,size}] }`，`dbx-store` 的 `sync-release-candidate.mjs` 直接读这个结构）
    - Release Notes（含平台表、SHA-256 校验清单、本次提交列表）与源码 tag
 
+发布 job 对 GitHub releases API 的 5xx 做了指数退避重试，并在「同名资产已存在」时先删后传。万一整步仍失败（API 大面积 5xx），可以拿这次 run 的构建产物手动补发，产物与候选包格式完全一致：
+
+```bash
+RUN=<run id>
+gh run download "$RUN" --pattern 'dbx-plugin-*' --dir /tmp/rel   # 各平台产物
+node dev/ci/make-release-candidates.mjs /tmp/rel                 # 生成 release-candidates.json
+gh release create v<version> --draft --notes-file notes.md /tmp/rel/*
+gh release edit v<version> --draft=false
+```
+
 商店展示信息写在仓库根的 `.dbx-store.json`（由 `dbx-store` 的同步任务在对应 tag 下抓取）：
 
 | 字段 | 说明 |

@@ -14,6 +14,11 @@ name: Release
 on:
   push:
     branches: [main]
+    # 纯文档改动不切版本；.dbx-store.json 故意不忽略——商店是按 tag 读它的
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
   workflow_dispatch:
     inputs:
       version:
@@ -311,9 +316,31 @@ jobs:
               --repo "$GITHUB_REPOSITORY"
           fi
 
+          # 同名资产已存在且 DELETE（clobber）被 5xx 打断时，上传会以 422 失败；
+          # 这里按名字删一次再传，避免整步卡死。
+          drop_asset() {
+            local name="$1"
+            local id
+            id="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq ".assets[] | select(.name == \"$name\") | .id" 2>/dev/null | head -1)"
+            [ -n "$id" ] || return 0
+            echo "  删除同名资产 $name (id=$id)"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" >/dev/null 2>&1 || true
+          }
+
+          upload_one() {
+            local file="$1" name
+            name="$(basename "$file")"
+            echo "上传 $name"
+            if gh release upload "$TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY" >/dev/null; then
+              return 0
+            fi
+            drop_asset "$name"
+            gh release upload "$TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY" >/dev/null
+          }
+
           for file in "${assets[@]}"; do
-            echo "上传 $(basename "$file")"
-            retry gh release upload "$TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+            retry upload_one "$file"
           done
 
           retry gh release edit "$TAG" \
