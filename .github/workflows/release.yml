@@ -30,6 +30,8 @@ concurrency:
 
 env:
   PLUGIN_CLI_VERSION: "0.1.10"
+  # 发布闸门依据：矩阵必须与这份清单完全一致，缺一个平台就不发布
+  EXPECTED_TARGETS: "darwin-arm64,darwin-x64,linux-arm64,linux-x64,windows-x64"
 
 jobs:
   prepare:
@@ -52,6 +54,16 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache: false
+
+      - name: 确认构建矩阵与期望平台一致
+        run: |
+          set -euo pipefail
+          expected="$(echo "$EXPECTED_TARGETS" | tr ',' '\n' | sed '/^$/d' | sort | paste -sd, -)"
+          matrix="$(sed -n '/include:/,/^$/p' .github/workflows/release.yml \
+            | grep -oE 'target: [a-z0-9-]+' | awk '{print $2}' | sort | paste -sd, -)"
+          echo "清单: $expected"
+          echo "矩阵: $matrix"
+          [ "$expected" = "$matrix" ] || { echo "::error::EXPECTED_TARGETS 与构建矩阵不一致"; exit 1; }
 
       - name: 校验 .dbx-store.json
         run: node dev/ci/check-store-metadata.mjs
@@ -181,6 +193,30 @@ jobs:
           set -euo pipefail
           ls -l release-assets
           node dev/ci/make-release-candidates.mjs release-assets
+
+      - name: 平台齐全校验（缺一个就不发布）
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          expected="$(echo "$EXPECTED_TARGETS" | tr ',' '\n' | sed '/^$/d' | sort)"
+          actual="$(node -e 'const {artifacts}=require("./release-assets/release-candidates.json");console.log(artifacts.map(a=>a.target).sort().join("\n"))')"
+          echo "期望平台:"; echo "$expected"
+          echo "实际产物:"; echo "$actual"
+          if [ "$expected" != "$actual" ]; then
+            missing="$(comm -23 <(echo "$expected") <(echo "$actual") | paste -sd' ' -)"
+            extra="$(comm -13 <(echo "$expected") <(echo "$actual") | paste -sd' ' -)"
+            {
+              echo "### 未发布：候选包不完整"
+              echo
+              echo "- 缺少平台：\`${missing:-无}\`"
+              echo "- 多出平台：\`${extra:-无}\`"
+              echo "- 已删除 tag \`$TAG\`，重跑一次会复用同一版本号"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::候选包不完整，缺少平台: ${missing:-无}；已删除 tag $TAG"
+            git push origin ":refs/tags/$TAG" || true
+            exit 1
+          fi
 
       - name: 生成 Release Notes
         env:
