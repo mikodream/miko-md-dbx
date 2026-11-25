@@ -281,17 +281,46 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+
+          # GitHub 的 releases API 偶发 500/502/504；一次失败不该毁掉整次发布。
+          # 每个调用都重试，并把资产逐个上传，缩小单次失败的影响面。
+          retry() {
+            local attempt=0 max=6
+            until "$@"; do
+              attempt=$((attempt + 1))
+              if [ "$attempt" -ge "$max" ]; then
+                echo "::error::重试 $max 次仍失败: $*"
+                return 1
+              fi
+              echo "::warning::调用失败，$((attempt * 10))s 后重试（$attempt/$max）: $*"
+              sleep $((attempt * 10))
+            done
+          }
+
           assets=(release-assets/*.dbxp release-assets/*.artifact.json release-assets/release-candidates.json)
           echo "待上传 ${#assets[@]} 个文件"
+
           # 先建成 draft，资产齐了再发布，避免商店同步抓到半个 Release
-          gh release create "$TAG" \
-            --draft \
-            --title "MIKO.MD 笔记 $VERSION" \
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release 已存在，复用: $TAG"
+          else
+            retry gh release create "$TAG" \
+              --draft \
+              --title "MIKO.MD 笔记 $VERSION" \
+              --notes-file release-notes.md \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+
+          for file in "${assets[@]}"; do
+            echo "上传 $(basename "$file")"
+            retry gh release upload "$TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+          done
+
+          retry gh release edit "$TAG" \
             --notes-file release-notes.md \
-            --repo "$GITHUB_REPOSITORY" || true
-          gh release upload "$TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
-          gh release edit "$TAG" --notes-file release-notes.md --title "MIKO.MD 笔记 $VERSION" \
-            --draft=false --repo "$GITHUB_REPOSITORY"
+            --title "MIKO.MD 笔记 $VERSION" \
+            --draft=false \
+            --repo "$GITHUB_REPOSITORY"
 
       - name: 发布后自检
         env:
