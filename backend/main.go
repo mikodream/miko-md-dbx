@@ -28,7 +28,7 @@ import (
 // the stderr banner can never disagree.
 const (
 	pluginID        = "miko.md.notes"
-	pluginVersion   = "0.1.3"
+	pluginVersion   = "0.1.4"
 	protocolVersion = 1
 
 	codeMethodNotFound = -32601
