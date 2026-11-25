@@ -1,0 +1,10 @@
+{
+  "name": "MIKO.MD 笔记",
+  "description": "把一个本地目录当成 DBX 里的笔记库：笔记是真实的 .md 文件，文件夹是真实的子目录，同时可以作为 mdnotes:// 虚拟文件系统在 DBX 文件浏览器里浏览。支持图片粘贴、导入 .md 与整个文件夹、整库备份与恢复。",
+  "icon": "assets/plugin.svg",
+  "tags": ["notes", "markdown", "filesystem", "local-first"],
+  "source": "https://github.com/mikodream/miko-md-dbx",
+  "homepage": "https://github.com/mikodream/miko-md-dbx",
+  "license": "Apache-2.0",
+  "releaseNotes": "0.1.0：真实 .md 笔记库连接类型、笔记工作台（目录树 / 编辑器 / 实时预览）、mdnotes:// 文件系统、图片粘贴与拖入导入、整库 zip 备份与恢复。"
+}

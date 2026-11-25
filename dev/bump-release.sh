@@ -9,6 +9,7 @@
 #   bump-release.sh --minor         # 0.1.1 -> 0.2.0（也接受 --major / --set 0.3.7）
 #   bump-release.sh --target linux-x64
 #   bump-release.sh --no-test --no-package
+#   bump-release.sh --version-only     # 只改版本号与后端身份，不构建（CI 的 prepare 阶段用）
 #
 # 自动同步的版本落点：
 #   manifest.json          version（必需）
@@ -23,6 +24,7 @@ EXPLICIT=""
 TARGET="${DBX_PLUGIN_TARGET:-}"
 DO_TEST=1
 DO_PACKAGE=1
+VERSION_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     --target) TARGET="${2:?--target 需要三元组}"; shift 2 ;;
     --no-test) DO_TEST=0; shift ;;
     --no-package) DO_PACKAGE=0; shift ;;
+    --version-only) VERSION_ONLY=1; DO_TEST=0; DO_PACKAGE=0; shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     -*)
       echo "未知参数: $1" >&2; exit 2 ;;
@@ -107,6 +110,11 @@ if [[ "$CHANGED" == "-" ]]; then
   echo "    确认它取自 manifest 或 Cargo.toml，否则握手会报 IDENTITY_MISMATCH。"
 else
   echo "    已同步后端: $CHANGED"
+fi
+
+if [[ $VERSION_ONLY -eq 1 ]]; then
+  echo "==> 只改版本号（跳过构建与打包）"
+  exit 0
 fi
 
 # ---------------------------------------------------------------- 构建

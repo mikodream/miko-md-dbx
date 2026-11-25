@@ -165,6 +165,39 @@ dbx-plugin package . --target darwin-arm64
 - **写入原子化**：临时文件 + `rename` 覆盖，保留原权限位；带 `expectedModifiedAt` 时检测外部改动并报 `CONFLICT`。
 - **备份不写进库**：zip 落在插件数据目录，分块读给宿主保存，避免把大文件塞进单条 8 MiB 消息。
 
+## 自动发布（GitHub Actions）
+
+`.github/workflows/release.yml` 在 **main 每次更新**时自动走完官方流程的第一步：
+
+1. 读 `manifest.json` 的版本；若该版本已发过（tag 已存在），自动 patch +1 并提交
+   `chore(release): vX [skip ci]`（同时改 `backend/main.go` 的 `pluginVersion`，两处必须一致）；
+2. 打 tag `v<version>`；
+3. 按平台矩阵构建**未签名**候选包（target 必须等于构建主机，所以一平台一台 runner）：
+
+   | runner | target |
+   | --- | --- |
+   | `macos-15` | `darwin-arm64` |
+   | `macos-15-intel` | `darwin-x64` |
+   | `ubuntu-24.04` | `linux-x64` |
+   | `ubuntu-24.04-arm` | `linux-arm64` |
+   | `windows-2022` | `windows-x64` |
+
+4. 汇总并发布 GitHub Release，资产包含：
+   - 每个平台的 `<id>-<version>-<target>.dbxp`
+   - 每个包对应的 `<id>-<version>-<target>.artifact.json`
+   - `release-candidates.json`（`{ plugin: {id,name,description,publisher,version,permissions}, artifacts: [{target,url,sha256,size}] }`，`dbx-store` 的 `sync-release-candidate.mjs` 直接读这个结构）
+   - Release Notes（含平台表、SHA-256 校验清单、本次提交列表）与源码 tag
+
+本地也能跑同一套汇总，用来验证产物：
+
+```bash
+node dev/ci/make-release-candidates.mjs dist   # 目录里放 *.dbxp 与 *.artifact.json
+```
+
+脚本会按官方规则校验：target 唯一、SHA-256/大小与包字节一致、包内没有 `signature.json`（必须未签名）、各平台 manifest 身份完全一致、元数据里不许有 `signingKeyId`。
+
+手动补发一次：Actions → Release → Run workflow，可填 `version` 指定版本号。商店侧只需把本仓库登记到 `dbx-store/automation/plugin-sources.json`（`autoUpdate: true`），它会自行拉 `release-candidates.json` 建候选 PR。
+
 ## 发布到官方商店
 
 作者不持私钥、不跑 `keygen`、不填 `signingKeyId`。流程：自己的仓库打 Tag 发候选 Release（含未签名 `.dbxp` + `.artifact.json` + `release-candidates.json`）→ `dbx-store` 同步 Workflow 建候选 PR → 维护者审核并签名 → 合并。每一步版本号必须递增，已发布资产不可覆盖。

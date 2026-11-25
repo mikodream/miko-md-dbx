@@ -1,0 +1,282 @@
+name: Release
+
+# 每次 main 更新都产出一个版本：打 tag v<version>，构建各平台未签名候选包，
+# 汇总成 release-candidates.json 后一起挂到 GitHub Release。
+# 版本号来源是 manifest.json；如果该版本已经发过，就自动 patch +1 再发。
+#
+# 产物（对应官方「提交官方商店的完整流程」第一步）：
+#   dist/<id>-<version>-<target>.dbxp        每个平台的未签名候选包
+#   dist/<id>-<version>-<target>.artifact.json 每个包对应的元数据
+#   release-candidates.json                  汇总，供 dbx-store 自动同步
+#
+# 候选包本身不签名：审核通过后由 dbx-store 的受保护工作流签 Ed25519。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "指定版本号（留空＝用 manifest.json 的版本，占用时自动 patch+1）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  PLUGIN_CLI_VERSION: "0.1.10"
+
+jobs:
+  prepare:
+    name: 决定版本并打 tag
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: false
+
+      - name: 计算版本、必要时递增，并打 tag
+        id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          version="$(node -p "require('./manifest.json').version")"
+          echo "manifest 版本: $version"
+
+          # 仓库外（远端）也可能已经有这个 tag
+          tag_taken() {
+            git rev-parse -q --verify "refs/tags/$1" >/dev/null 2>&1 && return 0
+            git ls-remote --exit-code --tags origin "refs/tags/$1" >/dev/null 2>&1
+          }
+
+          if [ -n "${REQUESTED:-}" ] && [ "$REQUESTED" != "$version" ]; then
+            echo "使用手动指定版本: $REQUESTED"
+            bash dev/bump-release.sh . --set "$REQUESTED" --version-only
+            version="$REQUESTED"
+          fi
+
+          # 同一版本已经发过 → patch +1，保证「每次 main 更新都有新版本」
+          bumped=0
+          while tag_taken "v$version"; do
+            echo "v$version 已存在，递增 patch"
+            bash dev/bump-release.sh . --patch --version-only
+            version="$(node -p "require('./manifest.json').version")"
+            bumped=1
+          done
+
+          if [ "$bumped" -eq 1 ]; then
+            # 版本落点：manifest.json 的 version + backend/main.go 的 pluginVersion，
+            # bump-release.sh 已经两处一起改并交叉校验过。
+            git add manifest.json backend/main.go
+            git commit -m "chore(release): v$version [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+          git tag -a "v$version" -m "MIKO.MD 笔记 v$version"
+          git push origin "refs/tags/v$version"
+
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### 目标版本 \`v$version\`" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: 构建 ${{ matrix.target }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      # 与 DBX 官方 reusable workflow 相同的 runner/target 组合。
+      # 原生 Sidecar 的 target 必须等于构建主机平台，所以一个平台一台 runner。
+      matrix:
+        include:
+          - { runner: ubuntu-24.04,     target: linux-x64 }
+          - { runner: ubuntu-24.04-arm, target: linux-arm64 }
+          - { runner: windows-2022,     target: windows-x64 }
+          - { runner: macos-15-intel,   target: darwin-x64 }
+          - { runner: macos-15,         target: darwin-arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+
+      - name: 安装 dbx-plugin CLI
+        run: npm install --global "@dbx-app/plugin-cli@${PLUGIN_CLI_VERSION}"
+
+      - name: 打包未签名候选包
+        shell: bash
+        run: |
+          set -euo pipefail
+          dbx-plugin --version
+          dbx-plugin package . --target "${{ matrix.target }}"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbx-plugin-${{ matrix.target }}
+          path: |
+            dist/*.dbxp
+            dist/*.artifact.json
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 生成 release-candidates.json 并发布
+    needs: [prepare, build]
+    # 任何一个平台的构建失败都不该吞掉其它平台的产物：只要不是被取消就继续，
+    # 并且最终要求至少有一个平台的包。
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build.result != 'cancelled' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: dbx-plugin-*
+          merge-multiple: true
+
+      - name: 汇总候选包
+        run: |
+          set -euo pipefail
+          ls -l release-assets
+          node dev/ci/make-release-candidates.mjs release-assets
+
+      - name: 生成 Release Notes
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          previous="$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)"
+          {
+            echo "## MIKO.MD 笔记 ${VERSION}"
+            echo
+            echo "真实 Markdown 笔记库的 DBX 插件：笔记是磁盘上的 \`.md\` 文件，文件夹是真实子目录，同一份库也能以 \`mdnotes://vault/\` 浏览。"
+            echo
+            echo "### 安装"
+            echo
+            echo "1. 在 DBX 中打开 **插件中心 → 允许安装未签名开发包**；"
+            echo "2. 下载下表中对应平台的 \`.dbxp\` 并安装；"
+            echo "3. 新建连接，类型选「MIKO.MD 笔记」，填笔记库目录。"
+            echo
+            echo "### 候选包"
+            echo
+            node -e '
+              const fs = require("node:fs");
+              const { plugin, artifacts } = JSON.parse(fs.readFileSync("release-assets/release-candidates.json", "utf8"));
+              const rows = artifacts.map((a) => `| ${a.target} | \`${a.url}\` | ${a.size} B | \`${a.sha256.slice(0, 16)}…\` |`);
+              console.log(["| 平台 | 文件 | 大小 | SHA-256 |", "| --- | --- | --- | --- |", ...rows].join("\n"));
+              console.log();
+              console.log(`插件 \`${plugin.id}\` ${plugin.version}，publisher \`${plugin.publisher}\`，权限：${plugin.permissions.join("、") || "无"}`);
+            '
+            echo
+            echo "### 校验"
+            echo
+            echo '```bash'
+            echo "sha256sum -c <<'EOF'"
+            node -e '
+              const fs = require("node:fs");
+              const { artifacts } = JSON.parse(fs.readFileSync("release-assets/release-candidates.json", "utf8"));
+              artifacts.forEach((a) => console.log(`${a.sha256}  ${a.url}`));
+            '
+            echo "EOF"
+            echo '```'
+            echo
+            echo "### 本次提交"
+            echo
+            if [ -n "$previous" ]; then
+              echo "自 \`${previous}\` 起："
+              echo
+              git log --no-merges --pretty='- %s (%h)' "${previous}..${TAG}"
+            else
+              git log --no-merges --pretty='- %s (%h)' "${TAG}"
+            fi
+            echo
+            echo "> 候选包未签名；进入官方商店需由 [dbx-store](https://github.com/t8y2/dbx-store) 审核并签 Ed25519。"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: 创建 Release 并上传资产
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(release-assets/*.dbxp release-assets/*.artifact.json release-assets/release-candidates.json)
+          echo "待上传 ${#assets[@]} 个文件"
+          # 先建成 draft，资产齐了再发布，避免商店同步抓到半个 Release
+          gh release create "$TAG" \
+            --draft \
+            --title "MIKO.MD 笔记 $VERSION" \
+            --notes-file release-notes.md \
+            --repo "$GITHUB_REPOSITORY" || true
+          gh release upload "$TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit "$TAG" --notes-file release-notes.md --title "MIKO.MD 笔记 $VERSION" \
+            --draft=false --repo "$GITHUB_REPOSITORY"
+
+      - name: 发布后自检
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,isDraft,assets \
+            --jq '
+              "tag: \(.tagName)  draft: \(.isDraft)",
+              (.assets | sort_by(.name)[] | "  \(.name)  \(.size) B  \(.state)")'
+          count() { gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq "[.assets[].name | select(endswith(\"$1\"))] | length"; }
+          packages="$(count .dbxp)"
+          metadata="$(count .artifact.json)"
+          candidates="$(count release-candidates.json)"
+          echo "候选包 $packages 个，元数据 $metadata 个，汇总 $candidates 个"
+          [ "$packages" -ge 1 ] || { echo "::error::Release 里没有 .dbxp"; exit 1; }
+          [ "$metadata" -eq "$packages" ] || { echo "::error::.artifact.json 数量与 .dbxp 不一致"; exit 1; }
+          [ "$candidates" -eq 1 ] || { echo "::error::缺少 release-candidates.json"; exit 1; }
+          {
+            echo "### 已发布 \`$TAG\`"
+            echo
+            echo "- 候选包：$packages"
+            echo "- 元数据：$metadata"
+            echo "- 汇总文件：release-candidates.json"
+          } >> "$GITHUB_STEP_SUMMARY"
